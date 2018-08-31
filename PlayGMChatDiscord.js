@@ -4,7 +4,7 @@ BOOT({
 	CONFIG : {
 		defaultBoxName : 'PlayGMChatDiscord',
 		isDevMode : true,
-		webServerPort : 8831
+		webServerPort : 8901
 	},
 	
 	NODE_CONFIG : {

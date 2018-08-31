@@ -8,8 +8,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 		let discordRoom = PlayGMChatDiscord.ROOM('Discord');
 		
 		let connectionsRef = firebase.database().ref('connections');
-		let chatsRef = firebase.database().ref('chats');
-		let iconsRef = firebase.storage().ref('icons');
+		let iconsRef = firebase.storage().ref('icons-discord');
 		let uploadsRef = firebase.storage().ref('uploads');
 		
 		let user;
@@ -443,13 +442,15 @@ PlayGMChatDiscord.MAIN = METHOD({
 					uploadButton.append(FontAwesome.GetIcon('upload'));
 					
 					uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
-						chatsRef.push({
-							userId : user.uid,
-							name : user.displayName,
-							userIconURL : userIconURL,
-							fileName : file.name,
-							downloadURL : downloadURL,
-							isImage : file.type.indexOf('image') !== -1
+						discordRoom.send({
+							methodName : 'sendFile',
+							data : {
+								userId : user.uid,
+								name : user.displayName,
+								userIconURL : userIconURL,
+								fileName : file.name,
+								downloadURL : downloadURL
+							}
 						});
 					});
 				});
@@ -459,6 +460,11 @@ PlayGMChatDiscord.MAIN = METHOD({
 				loading.remove();
 				
 				let isToScrollBottom = messageList.getScrollTop() >= messageList.getScrollHeight() - messageList.getHeight() - 10;
+				
+				if (chatData.userId === '485064204144082948') {
+					chatData.name = chatData.message.substring(0, chatData.message.indexOf(':') - 1);
+					chatData.message = chatData.message.substring(chatData.message.indexOf(':') + 2);
+				}
 				
 				chatDataSet.push(chatData);
 				
@@ -534,16 +540,16 @@ PlayGMChatDiscord.MAIN = METHOD({
 									}
 								}
 							},
-							src : userIconURLs[chatData.userId] === undefined ? (
-								chatData.userIconURL === undefined ? PlayGMChatDiscord.R('default-icon.png') : chatData.userIconURL
-							) : userIconURLs[chatData.userId]
+							src : chatData.userId !== '485064204144082948' || userIconURLs[chatData.name] === undefined ? (
+								chatData.userIconURL === undefined || chatData.userId === '485064204144082948' ? PlayGMChatDiscord.R('default-icon.png') : chatData.userIconURL
+							) : userIconURLs[chatData.name]
 						}), SPAN({
 							style : {
 								fontWeight : 'bolder',
 								marginRight : 6,
 								color : skinData.nameColor
 							},
-							c : chatData.userId === '485064204144082948' ? chatData.message.substring(0, chatData.message.indexOf(':') - 1) : chatData.name
+							c : chatData.name
 						}), SPAN({
 							style : {
 								fontSize : 0
@@ -563,7 +569,12 @@ PlayGMChatDiscord.MAIN = METHOD({
 									// 모바일 제외
 									if (
 									INFO.getOSName() !== 'Android' && INFO.getOSName() !== 'iOS' &&
-									preview === undefined && chatData.isImage === true) {
+									preview === undefined && (
+										chatData.fileName.indexOf('.png') !== -1 ||
+										chatData.fileName.indexOf('.jpg') !== -1 ||
+										chatData.fileName.indexOf('.jpeg') !== -1 ||
+										chatData.fileName.indexOf('.gif') !== -1
+									)) {
 										
 										preview = UUI.V_CENTER({
 											style : {
@@ -606,7 +617,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 							}
 						}) : RUN(() => {
 							
-							let message = chatData.userId === '485064204144082948' ? chatData.message.substring(chatData.message.indexOf(':') + 2) : chatData.message;
+							let message = chatData.message;
 							
 							// 호출 기능
 							if (chatData.isCalled !== true && chatData.name !== user.displayName && (message + ' ').indexOf('@' + user.displayName + ' ') !== -1) {
@@ -614,12 +625,12 @@ PlayGMChatDiscord.MAIN = METHOD({
 								// 아이폰은 지원 안함
 								if (global.Notification === undefined || Notification.permission !== 'granted') {
 									DELAY(() => {
-										chatsRef.push({
+										/*chatsRef.push({
 											userId : user.uid,
 											name : user.displayName,
 											userIconURL : userIconURL,
 											message : '(호출 기능이 차단된 유저입니다)'
-										});
+										});*/
 									});
 								}
 								
@@ -634,7 +645,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 								let updates = {};
 								chatData.isCalled = true;
 								updates[snapshot.key] = chatData;
-								chatsRef.update(updates);
+								//chatsRef.update(updates);
 							}
 							
 							let children = [];
@@ -739,21 +750,24 @@ PlayGMChatDiscord.MAIN = METHOD({
 						})]
 					}));
 					
-					/*if (iconMap[chatData.userId] === undefined) {
-						iconMap[chatData.userId] = [];
-					}
-					iconMap[chatData.userId].push(icon);
-					
-					iconsRef.child(chatData.userId).getDownloadURL().then((url) => {
-						userIconURLs[chatData.userId] = url;
+					if (chatData.userId === '485064204144082948') {
 						
-						EACH(iconMap[chatData.userId], (icon) => {
-							icon.setSrc(url);
+						if (iconMap[chatData.name] === undefined) {
+							iconMap[chatData.name] = [];
+						}
+						iconMap[chatData.name].push(icon);
+						
+						iconsRef.child(chatData.name).getDownloadURL().then((url) => {
+							userIconURLs[chatData.name] = url;
+							
+							EACH(iconMap[chatData.name], (icon) => {
+								icon.setSrc(url);
+							});
+							
+						}).catch(() => {
+							// ignore.
 						});
-						
-					}).catch(() => {
-						// ignore.
-					});*/
+					}
 				}
 				
 				// 마지막 메시지를 보고있거나 자기가 쓴 글이라면 스크롤 맨 아래로
@@ -923,8 +937,8 @@ PlayGMChatDiscord.MAIN = METHOD({
 													description.empty();
 													description.append('업로드 중...');
 													
-													iconsRef.child(user.uid).put(file).then((snapshot) => {
-														iconsRef.child(user.uid).getDownloadURL().then((url) => {
+													iconsRef.child(user.displayName).put(file).then((snapshot) => {
+														iconsRef.child(user.displayName).getDownloadURL().then((url) => {
 															
 															iconPreview.setSrc(url);
 															
@@ -946,7 +960,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 												height : 20,
 												borderRadius : 20
 											},
-											src : userIconURLs[user.uid] === undefined ? PlayGMChatDiscord.R('default-icon.png') : userIconURLs[user.uid]
+											src : userIconURLs[user.displayName] === undefined ? PlayGMChatDiscord.R('default-icon.png') : userIconURLs[user.displayName]
 										}),
 										on : {
 											tap : () => {
@@ -1055,11 +1069,11 @@ PlayGMChatDiscord.MAIN = METHOD({
 										user.updateProfile({
 											displayName : args[0]
 										}).then(() => {
-											chatsRef.push({
+											/*chatsRef.push({
 												isNameChanged : true,
 												originName : originName,
 												newName : user.displayName
-											});
+											});*/
 										});
 									}
 								}
@@ -1193,13 +1207,13 @@ PlayGMChatDiscord.MAIN = METHOD({
 				});
 			}
 			
-			iconsRef.child(user.uid).getDownloadURL().then((url) => {
+			iconsRef.child(user.displayName).getDownloadURL().then((url) => {
 				
 				userIconURL = url;
 				
-				userIconURLs[user.uid] = url;
+				userIconURLs[user.displayName] = url;
 				
-				EACH(iconMap[user.uid], (icon) => {
+				EACH(iconMap[user.displayName], (icon) => {
 					icon.setSrc(url);
 				});
 				

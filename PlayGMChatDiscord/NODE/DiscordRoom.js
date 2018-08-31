@@ -10,17 +10,30 @@ PlayGMChatDiscord.DiscordRoom = OBJECT({
 			channel = client.channels.get('484784718416576512');
 		});
 		
+		let createMessageData = (message) => {
+			let data = {
+				userId : message.author.id,
+				type : message.type,
+				message : message.content,
+				name : message.author.username,
+				userIconURL : message.author.avatar === TO_DELETE ? undefined : 'https://cdn.discordapp.com/avatars/' + message.author.id + '/' + message.author.avatar + '.png'
+			};
+			if (message.attachments !== undefined) {
+				message.attachments.forEach((attachment) => {
+					if (data.downloadURL === undefined) {
+						data.fileName = attachment.filename;
+						data.downloadURL = attachment.url;
+					}
+				});
+			}
+			return data;
+		};
+		
 		client.on('message', (message) => {
 			PlayGMChatDiscord.BROADCAST({
 				roomName : 'Discord',
 				methodName : 'message',
-				data : {
-					userId : message.author.id,
-					type : message.type,
-					message : message.content,
-					name : message.author.username,
-					userIconURL : message.author.avatar === TO_DELETE ? undefined : 'https://cdn.discordapp.com/avatars/' + message.author.id + '/' + message.author.avatar + '.png'
-				}
+				data : createMessageData(message)
 			});
 		});
 		
@@ -38,13 +51,7 @@ PlayGMChatDiscord.DiscordRoom = OBJECT({
 					}).then((_messages) => {
 						let messages = [];
 						_messages.forEach((message) => {
-							messages.push({
-								userId : message.author.id,
-								type : message.type,
-								message : message.content,
-								name : message.author.username,
-								userIconURL : message.author.avatar === TO_DELETE ? undefined : 'https://cdn.discordapp.com/avatars/' + message.author.id + '/' + message.author.avatar + '.png'
-							});
+							messages.push(createMessageData(message));
 						});
 						ret(messages);
 					}).catch(console.error);
@@ -54,6 +61,17 @@ PlayGMChatDiscord.DiscordRoom = OBJECT({
 			on('send', (data) => {
 				if (channel !== undefined) {
 					channel.send(data.name + ' : ' + data.message);
+				}
+			});
+			
+			on('sendFile', (data) => {
+				if (channel !== undefined) {
+					channel.send(data.name + ' : ', {
+						files : [{
+							attachment : data.downloadURL,
+							name : data.fileName
+						}]
+					});
 				}
 			});
 		});
