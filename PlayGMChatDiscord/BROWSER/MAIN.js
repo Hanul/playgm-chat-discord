@@ -611,6 +611,26 @@ PlayGMChatDiscord.MAIN = METHOD({
 							
 							let message = chatData.message;
 							
+							// 호출을 찾아 교체합니다.
+							let replaceCall = (message) => {
+								
+								let match = message.match(/\<@[^\>]*\>/);
+								if (match !== TO_DELETE) {
+									
+									let callStr = match[0];
+									let call = callStr.substring(2, callStr.length - 1);
+									if (call[0] === '!') {
+										call = call.substring(1);
+									}
+									
+									let index = message.indexOf(callStr);
+									
+									return message.substring(0, index) + '@' + chatData.mentions[call] + replaceCall(message.substring(index + callStr.length));
+								}
+								return message;
+							};
+							message = replaceCall(message);
+							
 							let children = [];
 							
 							EACH(message.split(' '), (message, i) => {

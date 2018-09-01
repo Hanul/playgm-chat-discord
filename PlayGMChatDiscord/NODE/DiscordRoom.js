@@ -15,7 +15,7 @@ PlayGMChatDiscord.DiscordRoom = OBJECT({
 			let mentions = {};
 			if (message.mentions.users.size > 0) {
 				message.mentions.users.forEach((userData) => {
-					mentions[userData.id] = userData.name;
+					mentions[userData.id] = userData.username;
 				});
 			}
 			
