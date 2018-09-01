@@ -7,7 +7,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 		
 		let discordRoom = PlayGMChatDiscord.ROOM('Discord');
 		
-		let connectionsRef = firebase.database().ref('connections');
+		let connectionsRef = firebase.database().ref('connections-discord');
 		let iconsRef = firebase.storage().ref('icons-discord');
 		let uploadsRef = firebase.storage().ref('uploads');
 		
@@ -15,15 +15,17 @@ PlayGMChatDiscord.MAIN = METHOD({
 		let userIconURL;
 		let userIconURLs = {};
 		
+		let lastSendedMessage;
+		
 		let chatStore = STORE('PlayGMChat');
 		let skin = chatStore.get('skin');
 		if (skin === undefined) {
-			skin = '기본';
+			skin = '디코';
 		}
 		
 		let skinData = SKINS[skin];
 		if (skinData === undefined) {
-			skinData = SKINS.기본
+			skinData = SKINS.디코
 		}
 		
 		let startService = () => {
@@ -305,7 +307,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 					left : 5,
 					bottom : 40
 				},
-				src : PlayGMChatDiscord.R('loading.gif')
+				src : PlayGMChatDiscord.R('loading.svg')
 			}).appendTo(BODY);
 			
 			BODY.addStyle({
@@ -389,11 +391,11 @@ PlayGMChatDiscord.MAIN = METHOD({
 			
 			// 도움말 추가
 			let addHelpMessage = () => {
-				addSystemMessage('명령어 : /명령어, /닉네임, /접속자, /스킨, /이모티콘, /프금, /로그아웃');
+				addSystemMessage('명령어 : /명령어, /닉네임, /접속자, /스킨, /이모지, /프금, /로그아웃');
 			};
 			
 			let showRecentlyUsers = (isFirst) => {
-				
+					
 				// 최근 유저를 가져옵니다.
 				connectionsRef.once('value', (snapshot) => {
 					
@@ -410,7 +412,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 					});
 					
 					let names = '';
-					let recentConnections = [];
+					let recentConnections = [];	
 					connections.forEach((connection) => {
 						// 마지막 접속자와 비교하여 2분 미만 내에 커넥션을 유지한 사용자만
 						if (lastTime - connection.time < 2 * 60 * 1000) {
@@ -423,7 +425,9 @@ PlayGMChatDiscord.MAIN = METHOD({
 						}
 					});
 					
-					addSystemMessage('최근 유저(' + recentConnections.length + '명) : ' + names);
+					discordRoom.send('getMembers', (memberStr) => {
+						addSystemMessage('오리진 유저(' + recentConnections.length + '명) : ' + names + ' / 디스코드 유저(' + memberStr.split(',').length + '명) : ' + memberStr);
+					});
 				});
 			};
 			
@@ -457,44 +461,31 @@ PlayGMChatDiscord.MAIN = METHOD({
 			};
 			
 			let addMessage = (chatData) => {
+				
 				loading.remove();
 				
 				let isToScrollBottom = messageList.getScrollTop() >= messageList.getScrollHeight() - messageList.getHeight() - 10;
 				
 				if (chatData.userId === '485064204144082948') {
-					chatData.name = chatData.message.substring(0, chatData.message.indexOf(':') - 1);
-					chatData.message = chatData.message.substring(chatData.message.indexOf(':') + 2);
+					if (chatData.message.indexOf(':') === -1) {
+						chatData.name = undefined;
+					} else {
+						chatData.name = chatData.message.substring(0, chatData.message.indexOf(':') - 1);
+						chatData.message = chatData.message.substring(chatData.message.indexOf(':') + 2);
+					}
+				}
+				
+				// 내가 방금 보낸 메시지면 이미 출력되어 있으므로 무시
+				if (chatData.name === user.displayName && chatData.message === lastSendedMessage) {
+					// ignore.
+					return;
 				}
 				
 				chatDataSet.push(chatData);
 				
-				// 카페 새 글 알림
-				if (chatData.isNewCafeArticle === true || chatData.isNewCafeArticle === 'true') {
-					addSystemMessage(['카페 새 글! ', A({
-						style : {
-							textDecoration : 'underline'
-						},
-						target : '_blank',
-						href : 'http://cafe.naver.com/playgm/' + chatData.articleId,
-						c : chatData.title + ', by ' + chatData.nickname
-					})], false);
-				}
-				
-				// 유게짱 새 글 알림
-				else if (chatData.isNewUGZArticle === true || chatData.isNewUGZArticle === 'true') {
-					addSystemMessage(['새 유게짱! ', A({
-						style : {
-							textDecoration : 'underline'
-						},
-						target : '_blank',
-						href : chatData.link,
-						c : chatData.title + ', by 굿군'
-					})], false);
-				}
-				
-				// 닉변 알림
-				else if (chatData.isNameChanged === true) {
-					addSystemMessage('닉네임 변경 : ' + chatData.originName + ' -> ' + chatData.newName);
+				// 시스템 알림
+				if (chatData.name === undefined) {
+					addSystemMessage(chatData.message);
 				}
 				
 				// 새 메시지
@@ -521,6 +512,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 						c : [icon = IMG({
 							style : {
 								marginRight : 5,
+								backgroundColor : '#fff',
 								onDisplayResize : (width, height) => {
 									// 모바일
 									if (width < 800) {
@@ -594,7 +586,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 												style : {
 													marginTop : 5
 												},
-												src : PlayGMChatDiscord.R('loading.gif')
+												src : PlayGMChatDiscord.R('loading.svg')
 											})
 										}).appendTo(BODY);
 										
@@ -619,35 +611,6 @@ PlayGMChatDiscord.MAIN = METHOD({
 							
 							let message = chatData.message;
 							
-							// 호출 기능
-							if (chatData.isCalled !== true && chatData.name !== user.displayName && (message + ' ').indexOf('@' + user.displayName + ' ') !== -1) {
-								
-								// 아이폰은 지원 안함
-								if (global.Notification === undefined || Notification.permission !== 'granted') {
-									DELAY(() => {
-										/*chatsRef.push({
-											userId : user.uid,
-											name : user.displayName,
-											userIconURL : userIconURL,
-											message : '(호출 기능이 차단된 유저입니다)'
-										});*/
-									});
-								}
-								
-								else if (document.hasFocus() !== true) {
-									new Notification(chatData.name, {
-										body : message,
-									}).onclick = () => {
-										focus();
-									};
-								}
-								
-								let updates = {};
-								chatData.isCalled = true;
-								updates[snapshot.key] = chatData;
-								//chatsRef.update(updates);
-							}
-							
 							let children = [];
 							
 							EACH(message.split(' '), (message, i) => {
@@ -656,49 +619,40 @@ PlayGMChatDiscord.MAIN = METHOD({
 									children.push(' ');
 								}
 								
-								// 이모티콘을 찾아 교체합니다.
-								let replaceEmoticon = (message) => {
+								// 이모지를 찾아 교체합니다.
+								let replaceEmoji = (message) => {
 									
-									let match = message.match(/:[^:]*:/);
+									let match = message.match(/\<:[^\>]*\>/);
 									if (match === TO_DELETE) {
 										children.push(message);
 									}
 									
 									else {
 										
-										let emoticonStr = match[0];
-										let emoticon = emoticonStr.substring(1, emoticonStr.length - 1).toLowerCase();
+										let emojiStr = match[0];
+										let emoji = emojiStr.substring(1, emojiStr.length - 1).toLowerCase();
 										
-										if (CHECK_IS_IN({
-											array : EMOTICONS,
-											value : emoticon
-										}) === true) {
-											
-											let index = message.indexOf(emoticonStr);
-											
-											children.push(message.substring(0, index));
-											
-											children.push(IMG({
-												style : {
-													marginBottom : -4
-												},
-												src : PlayGMChatDiscord.R('emoticon/' + emoticon + '.png'),
-												on : {
-													load : () => {
-														// 로딩이 다 되면 스크롤 끝으로
-														if (isToScrollBottom === true || chatData.userId === user.uid) {
-															scrollToEnd();
-														}
+										let index = message.indexOf(emojiStr);
+										
+										children.push(message.substring(0, index));
+										
+										children.push(IMG({
+											style : {
+												marginBottom : -4,
+												height : 20
+											},
+											src : 'https://cdn.discordapp.com/emojis/' + emoji.substring(emoji.lastIndexOf(':') + 1) + '.png',
+											on : {
+												load : () => {
+													// 로딩이 다 되면 스크롤 끝으로
+													if (isToScrollBottom === true || chatData.userId === user.uid) {
+														scrollToEnd();
 													}
 												}
-											}));
-											
-											message = replaceEmoticon(message.substring(index + emoticonStr.length));
-										}
+											}
+										}));
 										
-										else {
-											children.push(message);
-										}
+										message = replaceEmoji(message.substring(index + emojiStr.length));
 									}
 									
 									return message;
@@ -709,7 +663,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 									
 									let match = message.match(URL_REGEX);
 									if (match === TO_DELETE) {
-										message = replaceEmoticon(message);
+										message = replaceEmoji(message);
 									}
 									
 									else {
@@ -721,7 +675,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 										
 										let index = message.indexOf(url);
 										
-										message = replaceEmoticon(message.substring(0, index));
+										message = replaceEmoji(message.substring(0, index));
 										message = message.substring(index + url.length);
 										
 										if (url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0 && url.indexOf('ftp://') !== 0) {
@@ -778,8 +732,39 @@ PlayGMChatDiscord.MAIN = METHOD({
 			
 			discordRoom.send('messages', (messages) => {
 				REVERSE_EACH(messages, addMessage);
+				showRecentlyUsers(true);
 			});
-			discordRoom.on('message', addMessage);
+			
+			discordRoom.on('message', (chatData) => {
+				addMessage(chatData);
+				
+				// 호출 기능
+				if (chatData.name !== user.displayName && (chatData.message + ' ').indexOf('@' + user.displayName + ' ') !== -1) {
+					
+					// 아이폰은 지원 안함
+					if (global.Notification === undefined || Notification.permission !== 'granted') {
+						DELAY(() => {
+							discordRoom.send({
+								methodName : 'send',
+								data : {
+									userId : user.uid,
+									name : user.displayName,
+									userIconURL : userIconURL,
+									message : '(호출 기능이 차단된 유저입니다)'
+								}
+							});
+						});
+					}
+					
+					else if (document.hasFocus() !== true) {
+						new Notification(chatData.name, {
+							body : message,
+						}).onclick = () => {
+							focus();
+						};
+					}
+				}
+			});
 			
 			// 화면 크기가 바뀌면 스크롤 맨 아래로
 			EVENT('resize', () => {
@@ -1069,11 +1054,12 @@ PlayGMChatDiscord.MAIN = METHOD({
 										user.updateProfile({
 											displayName : args[0]
 										}).then(() => {
-											/*chatsRef.push({
-												isNameChanged : true,
-												originName : originName,
-												newName : user.displayName
-											});*/
+											discordRoom.send({
+												methodName : 'send',
+												data : {
+													message : '[닉네임 변경] ' + originName + ' -> ' + user.displayName
+												}
+											});
 										});
 									}
 								}
@@ -1104,15 +1090,32 @@ PlayGMChatDiscord.MAIN = METHOD({
 									}
 								}
 								
-								else if (command === '이모티콘') {
-									let emoticonStr = '';
-									EACH(EMOTICONS, (emoticon, i) => {
-										if (i > 0) {
-											emoticonStr += ', ';
-										}
-										emoticonStr += emoticon;
+								else if (command === '이모지') {
+									discordRoom.send('getEmojis', (emojiStr) => {
+										
+										let message = ['이모지 종류 : '];
+										EACH(emojiStr.split(', '), (emoji, i) => {
+											if (i > 0) {
+												message.push(', ');
+											}
+											message.push(IMG({
+												style : {
+													marginBottom : -4,
+													height : 20
+												},
+												src : 'https://cdn.discordapp.com/emojis/' + emoji.substring(emoji.lastIndexOf(':') + 1, emoji.length - 1) + '.png',
+												on : {
+													load : () => {
+														// 로딩이 다 되면 스크롤 끝으로
+														scrollToEnd();
+													}
+												}
+											}));
+											message.push(' ' + emoji);
+										});
+										
+										addSystemMessage(message);
 									});
-									addSystemMessage('이모티콘 사용법 : 메시지 중간에 :이모티콘:과 같은 형태로 사용, 이모티콘 종류 : ' + emoticonStr);
 								}
 								
 								else if (command === '로그아웃') {
@@ -1130,15 +1133,22 @@ PlayGMChatDiscord.MAIN = METHOD({
 							
 							// 메시지 전송
 							else {
+								
+								let chatData = {
+									userId : user.uid,
+									name : user.displayName,
+									userIconURL : userIconURL,
+									message : message.trim()
+								};
+								
 								discordRoom.send({
 									methodName : 'send',
-									data : {
-										userId : user.uid,
-										name : user.displayName,
-										userIconURL : userIconURL,
-										message : message.trim()
-									}
+									data : chatData
 								});
+								
+								addMessage(chatData);
+								
+								lastSendedMessage = message.trim();
 							}
 						}
 					}
@@ -1154,8 +1164,6 @@ PlayGMChatDiscord.MAIN = METHOD({
 					time : firebase.database.ServerValue.TIMESTAMP
 				});
 			}));
-			
-			showRecentlyUsers(true);
 			
 			// 붙여넣기로 업로드
 			EVENT('paste', (e) => {

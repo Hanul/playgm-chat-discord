@@ -11,12 +11,21 @@ PlayGMChatDiscord.DiscordRoom = OBJECT({
 		});
 		
 		let createMessageData = (message) => {
+			
+			let mentions = {};
+			if (message.mentions.users.size > 0) {
+				message.mentions.users.forEach((userData) => {
+					mentions[userData.id] = userData.name;
+				});
+			}
+			
 			let data = {
 				userId : message.author.id,
 				type : message.type,
 				message : message.content,
 				name : message.author.username,
-				userIconURL : message.author.avatar === TO_DELETE ? undefined : 'https://cdn.discordapp.com/avatars/' + message.author.id + '/' + message.author.avatar + '.png'
+				userIconURL : message.author.avatar === TO_DELETE ? undefined : 'https://cdn.discordapp.com/avatars/' + message.author.id + '/' + message.author.avatar + '.png',
+				mentions : mentions
 			};
 			if (message.attachments !== undefined) {
 				message.attachments.forEach((attachment) => {
@@ -60,7 +69,7 @@ PlayGMChatDiscord.DiscordRoom = OBJECT({
 			
 			on('send', (data) => {
 				if (channel !== undefined) {
-					channel.send(data.name + ' : ' + data.message);
+					channel.send((data.name !== undefined ? data.name + ' : ' : '') + data.message);
 				}
 			});
 			
@@ -72,6 +81,32 @@ PlayGMChatDiscord.DiscordRoom = OBJECT({
 							name : data.fileName
 						}]
 					});
+				}
+			});
+			
+			on('getEmojis', (data, ret) => {
+				let emojiStr = '';
+				client.emojis.forEach((emoji) => {
+					if (emojiStr !== '') {
+						emojiStr += ', ';
+					}
+					emojiStr += '<:' + emoji.name + ':' + emoji.id + '>';
+				});
+				ret(emojiStr);
+			});
+			
+			on('getMembers', (data, ret) => {
+				if (channel !== undefined) {
+					let memberStr = '';
+					channel.members.forEach((member) => {
+						if (member.user.presence.status !== 'offline') {
+							if (memberStr !== '') {
+								memberStr += ', ';
+							}
+							memberStr += member.user.username;
+						}
+					});
+					ret(memberStr);
 				}
 			});
 		});
