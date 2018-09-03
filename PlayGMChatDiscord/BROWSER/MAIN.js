@@ -222,7 +222,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 									borderRadius : 5
 								},
 								target : '_blank',
-								href : 'https://github.com/Hanul/playgm-chat-firebase',
+								href : 'https://github.com/Hanul/playgm-chat-discord',
 								c : UUI.BUTTON_H({
 									style : {
 										margin : 'auto'
