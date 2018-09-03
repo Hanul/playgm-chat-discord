@@ -433,7 +433,9 @@ PlayGMChatDiscord.MAIN = METHOD({
 			
 			let uploadFile = (file) => {
 				
-				let uploadTask = uploadsRef.child(file.name).put(file);
+				let fileId = UUID();
+				
+				let uploadTask = uploadsRef.child(fileId).child(file.name).put(file);
 				
 				uploadTask.on('state_changed', (snapshot) => {
 					uploadButton.empty();
@@ -452,6 +454,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 								userId : user.uid,
 								name : user.displayName,
 								userIconURL : userIconURL,
+								fileId : fileId,
 								fileName : file.name,
 								downloadURL : downloadURL
 							}
@@ -594,7 +597,9 @@ PlayGMChatDiscord.MAIN = METHOD({
 											src : chatData.downloadURL,
 											on : {
 												load : () => {
-													preview.empty();
+													if (preview !== undefined) {
+														preview.empty();
+													}
 												}
 											}
 										});
@@ -697,10 +702,6 @@ PlayGMChatDiscord.MAIN = METHOD({
 										
 										message = replaceEmoji(message.substring(0, index));
 										message = message.substring(index + url.length);
-										
-										if (url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0 && url.indexOf('ftp://') !== 0) {
-											url = 'http://' + url;
-										}
 										
 										children.push(A({
 											style : {
