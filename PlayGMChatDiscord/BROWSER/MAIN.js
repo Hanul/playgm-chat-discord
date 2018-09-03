@@ -12,7 +12,7 @@ PlayGMChatDiscord.MAIN = METHOD({
 		let uploadsRef = firebase.storage().ref('uploads');
 		
 		let user;
-		let userIconURL;
+		let userIconURL = PlayGMChatDiscord.R('default-icon.png');
 		let userIconURLs = {};
 		
 		let lastSendedMessage;
@@ -443,9 +443,15 @@ PlayGMChatDiscord.MAIN = METHOD({
 				}, () => {
 					uploadButton.empty();
 					uploadButton.append(FontAwesome.GetIcon('upload'));
+					uploadButton.addStyle({
+						color : '#ccc'
+					});
 				}, () => {
 					uploadButton.empty();
 					uploadButton.append(FontAwesome.GetIcon('upload'));
+					uploadButton.addStyle({
+						color : '#ccc'
+					});
 					
 					uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
 						discordRoom.send({
@@ -813,7 +819,12 @@ PlayGMChatDiscord.MAIN = METHOD({
 						padding : 10
 					},
 					inputStyle : {
-						color : skinData.color
+						color : skinData.color,
+						onDisplayResize : (width) => {
+							return {
+								width : width - 100
+							};
+						}
 					},
 					name : 'message',
 					placeholder : '메시지를 입력하세요.',
